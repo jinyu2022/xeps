@@ -262,7 +262,7 @@
 </iq>
 ]]></example>
       <example caption='Service replies with language details'><![CDATA[
-<iq type='result' to='bard@shakespeare.lit/globe' from=' translation.shakespeare.lit'>
+<iq type='result' to='bard@shakespeare.lit/globe' from='translation.shakespeare.lit'>
   <query xmlns='urn:xmpp:langtrans:items'>
     <item source_lang='en' jid='translation.shakespeare.lit' destination_lang='fr'
           engine='SYSTRANS 2005 Release 2' pivotable='true'/>
@@ -345,28 +345,67 @@
   </x>
 </iq>
 ]]></example>
-      <p>If the translation service cannot complete the translation it SHOULD return a &lt;item-not-found/&gt; error indicating some part of the translation request was problematic, unless doing so would violate the privacy and security considerations in XMPP Core and XMPP IM, or local security and privacy policies.</p>
+      <p>If the translation service cannot complete the translation it SHOULD return a &lt;bad-request/&gt; error indicating some part of the translation request was problematic, unless doing so would violate the privacy and security considerations in XMPP Core and XMPP IM, or local security and privacy policies.</p>
       <example caption='Translation could not be completed'><![CDATA[
 <iq type='error' id='translationReq_7' from='translation.shakespeare.lit' to='bard@shakespeare.lit/globe'>
   <x xmlns='urn:xmpp:langtrans'>
-    <source xml:lang='en'>How are you?</source>
-    <translation destination_lang='dy'/>
+    <source>How are you?</source>
+    <translation destination_lang='dyu'/>
   </x>
   <error type='modify'>
     <bad-request xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>
+    <text xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>The source element is missing the required xml:lang attribute.</text>
   </error>
 </iq>
 ]]></example>
-      <p>If privacy or security considerations make returning an &lt;item-not-found/&gt; error not feasible it SHOULD return a &lt;service-unavailable/&gt; error.</p>
+      <p>If privacy or security considerations make returning a &lt;bad-request/&gt; error not feasible it SHOULD return a &lt;service-unavailable/&gt; error.</p>
       <example caption='Service unavailable'><![CDATA[
 <iq type='error' id='translationReq_7' from='translation.shakespeare.lit' to='bard@shakespeare.lit/globe'>
   <x xmlns='urn:xmpp:langtrans'>
-    <source xml:lang='en'>How are you?</source>
-    <translation destination_lang='dy'/>
+    <source>How are you?</source>
+    <translation destination_lang='dyu'/>
   </x>
   <error type='cancel'>
     <service-unavailable xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>
   </error>
+</iq>
+]]></example>
+      <p>If the service knows why the request could not be completed, it SHOULD use one of the conditions in the following table instead. These conditions tell the client what to do next: retry later, change the request, or stop asking. The error stanza MAY also include a &lt;text/&gt; element as described in &xmppcore;, with a human-readable reason.</p>
+      <table caption='Recommended error conditions for translation requests'>
+        <tr><th>Condition</th><th>Type</th><th>Use when</th></tr>
+        <tr><td><tt>&lt;resource-constraint/&gt;</tt></td><td><tt>wait</tt></td><td>The service is temporarily out of capacity. The client can retry later.</td></tr>
+        <tr><td><tt>&lt;internal-server-error/&gt;</tt></td><td><tt>cancel</tt></td><td>An external translation engine used by the service failed, and the failure cannot be mapped to a more specific condition.</td></tr>
+        <tr><td><tt>&lt;item-not-found/&gt;</tt></td><td><tt>cancel</tt></td><td>The service does not offer the requested language pair, dictionary, or translation engine.</td></tr>
+        <tr><td><tt>&lt;not-acceptable/&gt;</tt></td><td><tt>modify</tt></td><td>The source text exceeds the per-request length limit. The client should split or shorten the text and send it again.</td></tr>
+        <tr><td><tt>&lt;feature-not-implemented/&gt;</tt></td><td><tt>modify</tt></td><td>The service cannot determine the source language of a request that marks it as <tt>und</tt>. The client should name the language explicitly and send it again.</td></tr>
+        <tr><td><tt>&lt;policy-violation/&gt;</tt></td><td><tt>cancel</tt></td><td>The text violates the operating rules or the content policy of the service.</td></tr>
+        <tr><td><tt>&lt;subscription-required/&gt;</tt></td><td><tt>auth</tt></td><td>The translation quota is used up, or the client needs a paid subscription.</td></tr>
+      </table>
+    </section3>
+    <section3 topic='Requests with an Undetermined Source Language' anchor='request-und'>
+      <p>In practice a user may not recognize the language of a message and may want the translation service to detect it. The recommended way to ask for this is the <tt>und</tt> code defined in &rfc5646;: the client sets <tt>xml:lang='und'</tt> on &lt;source/&gt;. The attribute cannot be omitted, because the schema requires <tt>xml:lang</tt> on &lt;source/&gt;. A service that can detect languages announces it by including an &lt;item/&gt; with <tt>source_lang='und'</tt> in its reply to a <tt>langtrans:items</tt> query. A service that receives <tt>und</tt> SHOULD detect the language and report the one it used in <tt>source_lang</tt> on the corresponding &lt;translation/&gt;. If it cannot detect the language, it SHOULD return a &lt;feature-not-implemented/&gt; error. The client can then name the language itself and send the request again.</p>
+      <example caption='Translation provider announces that it can detect the source language'><![CDATA[
+<iq type='result' id='disco2' from='translation.shakespeare.lit' to='bard@shakespeare.lit/globe'>
+  <query xmlns='urn:xmpp:langtrans:items'>
+    <item source_lang='und' jid='translation.shakespeare.lit' destination_lang='en'
+          engine='LinguaForge MT 3.1'/>
+  </query>
+</iq>
+]]></example>
+      <example caption='Entity requests a translation of text in an undetermined language'><![CDATA[
+<iq from='bard@shakespeare.lit/globe' id='translationReq_8' to='translation.shakespeare.lit' type='get'>
+  <x xmlns='urn:xmpp:langtrans'>
+    <source xml:lang='und'>Wie geht es Ihnen?</source>
+    <translation destination_lang='en'/>
+  </x>
+</iq>
+]]></example>
+      <example caption='Translation provider reports the language it detected'><![CDATA[
+<iq type='result' id='translationReq_8' from='translation.shakespeare.lit' to='bard@shakespeare.lit/globe'>
+  <x xmlns='urn:xmpp:langtrans'>
+    <source xml:lang='und'>Wie geht es Ihnen?</source>
+    <translation destination_lang='en' source_lang='de' engine='default'>How are you?</translation>
+  </x>
 </iq>
 ]]></example>
     </section3>
@@ -419,11 +458,14 @@
     </xs:documentation>
   </xs:annotation>
 
+  <xs:import namespace='http://www.w3.org/XML/1998/namespace'
+             schemaLocation='http://www.w3.org/2001/03/xml.xsd'/>
+
   <xs:element name='x'>
     <xs:complexType>
-      <xs:element ref='source' use='optional'/>
       <xs:sequence>
-        <xs:element ref='translation' use='required' minOccurs='1'/>
+        <xs:element ref='source' minOccurs='0'/>
+        <xs:element ref='translation' minOccurs='1' maxOccurs='unbounded'/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
@@ -441,7 +483,7 @@
   <xs:element name='translation'>
     <xs:complexType>
       <xs:simpleContent>
-        <xs:extension base='empty'>
+        <xs:extension base='xs:string'>
           <xs:attribute name='charset' type='xs:string' use='optional'/>
           <xs:attribute name='source_lang' type='xs:language' use='optional' />
           <xs:attribute name='destination_lang' type='xs:language' use='required'/>
@@ -452,12 +494,6 @@
       </xs:simpleContent>
     </xs:complexType>
   </xs:element>
-
-  <xs:simpleType name='empty'>
-    <xs:restriction base='xs:string'>
-      <xs:enumeration value=''/>
-    </xs:restriction>
-  </xs:simpleType>
 
 </xs:schema>
 ]]></code>
